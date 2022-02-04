@@ -5,7 +5,6 @@ import torch
 import torch.nn.utils.prune as prune
 
 from pytorch_lightning import Trainer, seed_everything
-# from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
 
@@ -39,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--max_epochs", type=int, default=100)
     parser.add_argument("--num_workers", type=int, default=8)
-    parser.add_argument("--gpu_id", type=str, default="3")
+    parser.add_argument("--gpu_id", type=str, default="1")
 
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--weight_decay", type=float, default=1e-2)
@@ -49,7 +48,7 @@ if __name__ == "__main__":
 
 
     seed_everything(0)
-    # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
     if args.logger == "wandb":
         logger = WandbLogger(name=args.classifier, project="cifar10")
@@ -60,12 +59,13 @@ if __name__ == "__main__":
     trainer = Trainer(
         fast_dev_run=bool(args.dev),
         logger=logger if not bool(args.dev + args.test_phase) else None,
-        # gpus=-1,
+        gpus=1,
         deterministic=True,
         enable_model_summary=False,
         log_every_n_steps=1,
         max_epochs=args.max_epochs,
         precision=args.precision,
+        enable_checkpointing=False
     )
 
     model = CIFAR10Module(args)
@@ -76,9 +76,8 @@ if __name__ == "__main__":
             )
     model.model.load_state_dict(torch.load(state_dict))
 
-    # model.model.eval() # for evaluation
-    # trainer=Trainer()
-    # trainer.test(model, data.test_dataloader())
+    model.model.eval() # for evaluation
+    trainer=Trainer()
     
     
     parameters_to_prune=[]
@@ -89,18 +88,15 @@ if __name__ == "__main__":
 
     torch.save(model.model.state_dict(), './compressed_models/vgg11_bn_100.pt')
 
-    prune_fraction=0.1
-    current=100
-
     sparsities=[]
     for (module, name) in parameters_to_prune:
         sparsities.append(100. * float(torch.sum(module.weight == 0)) / float(module.weight.nelement()))
         
-    print(current)
+    print(100)
     print(sparsities)
+    trainer.test(model, data.test_dataloader())
     
-    while current>1:
-        current=current*(1-prune_fraction)
+    for current in [90, 50, 10, 7.5, 5, 2, 1]:
         prune.global_unstructured(
             parameters_to_prune,
             pruning_method=prune.L1Unstructured,
@@ -113,8 +109,11 @@ if __name__ == "__main__":
         
         print(current)
         print(sparsities)
+        trainer.test(model, data.test_dataloader())
         
         
-        torch.save(model.model.state_dict(), './compressed_models/vgg11_bn_'+str(int(current))+'.pt')
+
+
+        torch.save(model.model.state_dict(), './compressed_models/vgg11_bn_'+str(current)+'.pt')
 
     

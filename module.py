@@ -26,16 +26,13 @@ all_classifiers = {
     "inception_v3": inception_v3(),
 }
 
-
 class CIFAR10Module(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
         print(hparams)
         self.save_hyperparameters(hparams)
-
         self.criterion = torch.nn.CrossEntropyLoss()
         self.accuracy = Accuracy()
-
         self.model = all_classifiers[self.hparams.classifier]
 
     def forward(self, batch):
